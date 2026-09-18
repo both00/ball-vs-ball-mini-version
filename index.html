@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Ball VS Ball Arena</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:#0e0e12;color:#eee;font-family:Consolas,Monaco,monospace}
+body{display:grid;place-items:center;padding:12px}
+.dashboard{width:min(100%,420px);background:#15151b;border:1px solid #30303a;border-radius:14px;padding:10px;box-shadow:0 14px 40px #0008}
+h1{font-size:16px;margin:0 0 8px;text-align:center;letter-spacing:1px}
+.hud{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.card{background:#0e0e12;border:1px solid #292932;border-radius:8px;padding:6px}
+.name{display:flex;justify-content:space-between;font-size:11px}
+.hearts{font-size:12px;letter-spacing:-2px}
+.hp{height:7px;background:#282831;border-radius:5px;overflow:hidden;margin-top:5px}
+.hp>i{display:block;height:100%;width:100%;transition:width .15s;background:#55e06f}
+#p2bar{background:#ff5c68}
+.arena-wrap{display:grid;place-items:center;margin:9px 0}
+canvas{width:250px;height:250px;background:#09090d;border:2px solid #343440;border-radius:8px;image-rendering:auto;touch-action:none}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+label{font-size:9px;color:#aaa}
+select,button{width:100%;font:inherit;border-radius:7px;border:1px solid #363640;background:#202029;color:#eee;padding:8px}
+select{font-size:10px}
+button{grid-column:1/-1;background:#f2f2f2;color:#101014;font-weight:900;cursor:pointer}
+button:hover{background:#fff}
+.info{display:flex;justify-content:space-between;font-size:9px;color:#888;margin-top:6px}
+#status{color:#ddd}
+</style>
+</head>
+<body>
+<main class="dashboard">
+<h1>⚔ BALL VS BALL ARENA ⚔</h1>
+
+<section class="hud">
+  <div class="card">
+    <div class="name"><b>PLAYER 1</b><span id="p1hpText">100</span></div>
+    <div class="hearts" id="p1hearts">❤️❤️❤️</div>
+    <div class="hp"><i id="p1bar"></i></div>
+  </div>
+  <div class="card">
+    <div class="name"><b>PLAYER 2</b><span id="p2hpText">100</span></div>
+    <div class="hearts" id="p2hearts">❤️❤️❤️</div>
+    <div class="hp"><i id="p2bar"></i></div>
+  </div>
+</section>
+
+<div class="arena-wrap"><canvas id="game" width="250" height="250"></canvas></div>
+
+<section class="controls">
+  <div>
+    <label for="p1type">PLAYER 1 TYPE</label>
+    <select id="p1type">
+      <option value="glass">🧊 Glass Ball</option>
+      <option value="axe">🪓 Axe Ball</option>
+      <option value="thief">🔪 Thief Ball</option>
+      <option value="poison">☠️ Poison Spike Ball</option>
+      <option value="blade">⚔️ Blade Ball</option>
+      <option value="machine">🔫 Machine Gun Ball</option>
+      <option value="spider">🕸️ Spider Ball</option>
+      <option value="vampire">🧛 Vampire Ball</option>
+      <option value="charge">⚡ Charge Ball</option>
+      <option value="burst">💥 Burst Ball</option>
+      <option value="chess">♟️ Chess Ball</option>
+      <option value="dice">🎲 Dice Ball</option>
+      <option value="ice">❄️ Ice Cone Ball</option></select>
+  </div>
+  <div>
+    <label for="p2type">PLAYER 2 TYPE</label>
+    <select id="p2type">
+      <option value="glass">🧊 Glass Ball</option>
+      <option value="axe">🪓 Axe Ball</option>
+      <option value="thief">🔪 Thief Ball</option>
+      <option value="poison">☠️ Poison Spike Ball</option>
+      <option value="blade">⚔️ Blade Ball</option>
+      <option value="machine">🔫 Machine Gun Ball</option>
+      <option value="spider">🕸️ Spider Ball</option>
+      <option value="vampire">🧛 Vampire Ball</option>
+      <option value="charge">⚡ Charge Ball</option>
+      <option value="burst">💥 Burst Ball</option>
+      <option value="chess">♟️ Chess Ball</option>
+      <option value="dice">🎲 Dice Ball</option>
+      <option value="ice">❄️ Ice Cone Ball</option></select>
+  </div>
+  <button id="launch">▶ LAUNCH BALLS</button>
+</section>
+<div class="info"><span id="status">READY</span><span id="round">ROUND 1</span></div>
+</main>
+
+<script>
+"use strict";
+const canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
+const W=250,H=250;
+const p1bar=document.getElementById("p1bar"),p2bar=document.getElementById("p2bar");
+const p1txt=document.getElementById("p1hpText"),p2txt=document.getElementById("p2hpText");
+const p1hearts=document.getElementById("p1hearts"),p2hearts=document.getElementById("p2hearts");
+const statusEl=document.getElementById("status"),roundEl=document.getElementById("round");
+
+let audio=null, running=false, roundNo=1, particles=[], beams=[], last=0, shake=0, flash=0;
+const TYPES={
+ glass:{r:10,m:1,spd:1.05,dmg:9,color:"#bfefff",name:"Glass Ball"},
+ axe:{r:11,m:1.1,spd:1.0,dmg:10,color:"#bdbdbd",name:"Axe Ball"},
+ thief:{r:10,m:.95,spd:1.12,dmg:8,color:"#c8a2ff",name:"Thief Ball"},
+ poison:{r:11,m:1.05,spd:.92,dmg:8,color:"#65e56e",name:"Poison Spike Ball"},
+ blade:{r:10,m:1,spd:.98,dmg:8,color:"#e7e7f5",name:"Blade Ball"},
+ machine:{r:9,m:.9,spd:1.12,dmg:7,color:"#ffb84d",name:"Machine Gun Ball"},
+ spider:{r:10,m:1,spd:1.0,dmg:8,color:"#b06cff",name:"Spider Ball"},
+ vampire:{r:10,m:1,spd:.95,dmg:8,color:"#e64b68",name:"Vampire Ball"},
+ charge:{r:11,m:1.05,spd:.88,dmg:8,color:"#ffe066",name:"Charge Ball"},
+ burst:{r:10,m:1,spd:1.08,dmg:8,color:"#ff7a45",name:"Burst Ball"},
+ chess:{r:10,m:1,spd:1.15,dmg:10,color:"#f4f4f4",name:"Chess Ball"},
+ dice:{r:11,m:1.05,spd:.92,dmg:8,color:"#ffffff",name:"Dice Ball"},
+ ice:{r:11,m:1.1,spd:.9,dmg:9,color:"#75dfff",name:"Ice Cone Ball"}
+};
+let balls=[];
+let webs=[],spikes=[],iceBombs=[],diceDrops=[],projectiles=[];
+
+function makeBall(x,y,type,side){
+ const t=TYPES[type], a=(side===1?0:Math.PI)+(.45-Math.random()*.9);
+ return {x,y,vx:Math.cos(a)*2.1*t.spd,vy:Math.sin(a)*2.1*t.spd,r:t.r,m:t.m,hp:100,type,side,color:t.color,cd:0,wallCd:0,life:3,spin:Math.random()*7,
+ blades:2,spawnTime:performance.now()/1000,charge:0,chargeTimer:0,diceTimer:0,dashTimer:0,stick:null,stickTimer:0,projectiles:[]};
+}
+function reset(){
+ balls=[makeBall(38,125,document.getElementById("p1type").value,1),
+        makeBall(212,125,document.getElementById("p2type").value,2)];
+ particles=[];beams=[];webs=[];spikes=[];iceBombs=[];diceDrops=[];projectiles=[];shake=0;flash=0;running=true;last=performance.now();
+ statusEl.textContent="FIGHT!";
+ roundEl.textContent="ROUND "+roundNo;
+ updateHud();ensureAudio();
+}
+document.getElementById("launch").onclick=reset;
+
+function ensureAudio(){
+ if(!audio) audio=new (window.AudioContext||window.webkitAudioContext)();
+ if(audio.state==="suspended")audio.resume();
+}
+function tone(freq,dur=.06,type="sine",gain=.045){
+ if(!audio)return;
+ const o=audio.createOscillator(),g=audio.createGain();
+ o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(gain,audio.currentTime);
+ g.gain.exponentialRampToValueAtTime(.0001,audio.currentTime+dur);
+ o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+dur);
+}
+function noise(dur=.12,gain=.05){
+ if(!audio)return;
+ const b=audio.createBuffer(1,audio.sampleRate*dur,audio.sampleRate),d=b.getChannelData(0);
+ for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*(1-i/d.length);
+ const s=audio.createBufferSource(),g=audio.createGain();s.buffer=b;g.gain.value=gain;
+ s.connect(g).connect(audio.destination);s.start();
+}
+function sound(kind){
+ if(kind==="wall")tone(150,.035,"square",.025);
+ if(kind==="hit"){tone(90,.08,"triangle",.05);tone(240,.045,"square",.025)}
+ if(kind==="laser"){tone(700,.07,"sawtooth",.025);tone(1100,.05,"sawtooth",.018)}
+ if(kind==="boom"){noise(.18,.075);tone(65,.18,"sawtooth",.05)}
+ if(kind==="win"){tone(440,.1);setTimeout(()=>tone(660,.1),90);setTimeout(()=>tone(880,.16),180)}
+}
+
+function updateHud(){
+ for(const b of balls){
+   const bar=b.side===1?p1bar:p2bar,txt=b.side===1?p1txt:p2txt,he=b.side===1?p1hearts:p2hearts;
+   const hp=Math.max(0,b.hp);bar.style.width=hp+"%";txt.textContent=Math.ceil(hp);
+   he.textContent="❤️".repeat(Math.max(0,Math.ceil(hp/34)));
+ }
+}
+function burst(x,y,c,n=10){
+ for(let i=0;i<n;i++){
+  const a=Math.random()*Math.PI*2,s=.5+Math.random()*2.8;
+  particles.push({x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:.35+.4*Math.random(),c});
+ }
+}
+function damage(target,amount){
+ target.hp-=amount; burst(target.x,target.y,target.color,7); shake=3; flash=.07;
+ if(target.hp<=0){target.hp=0;explode(target)}
+ updateHud();
+}
+function explode(b){
+ if(b.dead)return;b.dead=true;burst(b.x,b.y,b.color,30);sound("boom");
+}
+function nearestEnemy(b){return balls.find(q=>q!==b&&!q.dead)}
+function hit(a,b,base=8){
+ let mult=1;
+ if(a.type==="charge")mult*=1+Math.min(2.5,a.charge);
+ if(a.type==="burst"&&a.dashTimer>0)mult*=3.2;
+ if(a.type==="axe")mult*=1+Math.max(0,1-a.hp/100)*.8;
+ damage(b,base*mult);
+ if(a.type==="vampire"){
+  const heal=base*mult*.45;
+  a.hp=Math.min(100,a.hp+heal);
+  updateHud();
+ }
+ sound("hit");
+}
+function shatter(b,target){
+ for(let i=0;i<9;i++){
+  const a=Math.atan2(target.y-b.y,target.x-b.x)+(Math.random()-.5)*1.7;
+  particles.push({x:b.x,y:b.y,vx:Math.cos(a)*(2+Math.random()*3),vy:Math.sin(a)*(2+Math.random()*3),life:.5,c:"#dffaff",size:2});
+ }
+ damage(target,11); sound("boom");
+}
+function throwProjectile(b,target,kind){
+ b.projectiles.push({x:b.x,y:b.y,target,life:1.2,kind,side:b.side});
+ sound(kind==="laser"?"laser":"hit");
+}
+function wallEffect(b){
+ let hitWall=false;
+ if(b.x-b.r<0){b.x=b.r;b.vx=Math.abs(b.vx)*1.0;hitWall=true}
+ if(b.x+b.r>W){b.x=W-b.r;b.vx=-Math.abs(b.vx);hitWall=true}
+ if(b.y-b.r<0){b.y=b.r;b.vy=Math.abs(b.vy);hitWall=true}
+ if(b.y+b.r>H){b.y=H-b.r;b.vy=-Math.abs(b.vy);hitWall=true}
+ if(hitWall){
+  burst(b.x,b.y,b.color,3);sound("wall");
+  if(b.type==="spider") webs.push({x:b.x,y:b.y,r:17,life:4,side:b.side});
+  if(b.type==="poison") spikes.push({x:b.x,y:b.y,life:4,side:b.side});
+  if(b.type==="ice") iceBombs.push({x:b.x,y:b.y,life:.45,side:b.side});
+ }
+}
+function collide(a,b){
+ let dx=b.x-a.x,dy=b.y-a.y,dist=Math.hypot(dx,dy)||.001,min=a.r+b.r;
+ if(dist>=min)return;
+ const nx=dx/dist,ny=dy/dist,overlap=min-dist;
+ a.x-=nx*overlap/2;a.y-=ny*overlap/2;b.x+=nx*overlap/2;b.y+=ny*overlap/2;
+ const rvx=b.vx-a.vx,rvy=b.vy-a.vy,rel=rvx*nx+rvy*ny;
+ if(rel<0){
+  const j=-(1+.96)*rel/(1/a.m+1/b.m);
+  a.vx-=j*nx/a.m;a.vy-=j*ny/a.m;b.vx+=j*nx/b.m;b.vy+=j*ny/b.m;
+ }
+ if(a.type==="glass")shatter(a,b); else hit(a,b,a.dmg);
+ if(b.type==="glass")shatter(b,a); else hit(b,a,b.dmg);
+ if(a.type==="vampire"){a.stick=b; a.stickTimer=1.2}
+ if(b.type==="vampire"){b.stick=a; b.stickTimer=1.2}
+ if(a.type==="burst")a.dashTimer=.35;
+ if(b.type==="burst")b.dashTimer=.35;
+}
+function spawnDice(b){
+ if(b.diceTimer>0)return;
+ b.diceTimer=2.2;
+ const n=1+Math.floor(Math.random()*6);
+ diceDrops.push({x:b.x,y:b.y,n,life:1.4,side:b.side});
+ damage(b,n);
+}
+function centerChess(b){
+ if(b.chessTimer>0)return;
+ b.chessTimer=2.4;
+ const target=nearestEnemy(b); if(!target)return;
+ const cx=W/2,cy=H/2;
+ b.vx=(cx-b.x)*.055;b.vy=(cy-b.y)*.055;
+ b.chessTarget=target;
+}
+function update(dt){
+ for(const b of balls){
+  if(b.dead)continue;
+  b.cd=Math.max(0,b.cd-dt); b.diceTimer=Math.max(0,b.diceTimer-dt);
+  b.dashTimer=Math.max(0,b.dashTimer-dt); b.stickTimer=Math.max(0,b.stickTimer-dt);
+  if(b.chargeTimer!==undefined)b.charge=Math.min(2.5,b.charge+dt*.22);
+  if(b.stick&&b.stickTimer>0&&!b.stick.dead){
+   const t=b.stick,dx=t.x-b.x,dy=t.y-b.y,d=Math.hypot(dx,dy)||1;
+   b.x=t.x-dx/d*(b.r+t.r-2);b.y=t.y-dy/d*(b.r+t.r-2);
+   damage(t,5*dt);b.hp=Math.min(100,b.hp+3*dt);updateHud();
+  }else b.stick=null;
+
+  const enemy=nearestEnemy(b);
+  if(enemy){
+   const dx=enemy.x-b.x,dy=enemy.y-b.y,d=Math.hypot(dx,dy)||1;
+   if(b.type==="machine"&&b.cd<=0){b.cd=.32;throwProjectile(b,enemy,"bullet")}
+   if(b.type==="thief"&&b.cd<=0){b.cd=.8-Math.min(.55,(1-b.hp/100)*.55);throwProjectile(b,enemy,"knife")}
+   if(b.type==="vampire"&&b.cd<=0&&d<25){b.cd=.9;b.stick=enemy;b.stickTimer=1.2}
+   if(b.type==="chess")centerChess(b);
+  }
+  if(b.type==="dice")spawnDice(b);
+
+  b.x+=b.vx*60*dt;b.y+=b.vy*60*dt;
+  const speed=Math.hypot(b.vx,b.vy);
+  if(speed<.42){const a=Math.random()*Math.PI*2;b.vx+=Math.cos(a)*.6;b.vy+=Math.sin(a)*.6}
+  if(speed>5){b.vx*=.985;b.vy*=.985}
+  wallEffect(b);
+
+  if(b.type==="axe"){
+   b.spinSpeed=.08+(1-b.hp/100)*.18;
+   if(enemy&&Math.hypot(enemy.x-b.x,enemy.y-b.y)<32&&b.cd<=0){b.cd=.55;hit(b,enemy,12)}
+  }
+  if(b.type==="blade"){
+   b.blades=Math.min(10,2+Math.floor((performance.now()/1000-b.spawnTime)*.35));
+   if(enemy&&Math.hypot(enemy.x-b.x,enemy.y-b.y)<b.r+20&&b.cd<=0){b.cd=.35;hit(b,enemy,5+b.blades*.45)}
+  }
+  if(b.type==="poison"&&enemy&&spikes.some(s=>Math.hypot(enemy.x-s.x,enemy.y-s.y)<18)){damage(enemy,7*dt)}
+  if(b.type==="spider"&&enemy&&webs.some(s=>Math.hypot(enemy.x-s.x,enemy.y-s.y)<s.r)){damage(enemy,10*dt)}
+  if(b.type==="ice"&&iceBombs.length&&enemy){
+   for(const ib of iceBombs)if(!ib.used&&Math.hypot(enemy.x-ib.x,enemy.y-ib.y)<38){
+    ib.used=true;damage(enemy,18);burst(ib.x,ib.y,"#8eeaff",20);sound("boom");
+   }
+  }
+  if(b.type==="charge"&&enemy&&Math.hypot(enemy.x-b.x,enemy.y-b.y)<28&&b.cd<=0){
+   b.cd=.8;hit(b,enemy,10+14*b.charge);b.charge=0;
+  }
+  if(b.type==="burst"&&enemy&&Math.hypot(enemy.x-b.x,enemy.y-b.y)<28&&b.cd<=0){
+   b.cd=.65;b.dashTimer=.35;const dx=enemy.x-b.x,dy=enemy.y-b.y,d=Math.hypot(dx,dy)||1;
+   b.vx=dx/d*4.5;b.vy=dy/d*4.5;hit(b,enemy,13);
+  }
+ }
+ const a=balls[0],b=balls[1];if(a&&!a.dead&&b&&!b.dead)collide(a,b);
+
+ for(const p of particles){p.x+=p.vx*60*dt;p.y+=p.vy*60*dt;p.vx*=.985;p.vy*=.985;p.life-=dt}
+ particles=particles.filter(p=>p.life>0);
+ for(const w of webs)w.life-=dt; webs=webs.filter(w=>w.life>0);
+ for(const s of spikes)s.life-=dt; spikes=spikes.filter(s=>s.life>0);
+ for(const i of iceBombs)i.life-=dt; iceBombs=iceBombs.filter(i=>i.life>0&&!i.used);
+ for(const d of diceDrops)d.life-=dt; diceDrops=diceDrops.filter(d=>d.life>0);
+ for(const pr of projectiles){
+  pr.life-=dt;
+  if(!pr.target||pr.target.dead)continue;
+  const dx=pr.target.x-pr.x,dy=pr.target.y-pr.y,len=Math.hypot(dx,dy)||1,s=7;
+  pr.x+=dx/len*s;pr.y+=dy/len*s;
+  if(Math.hypot(pr.target.x-pr.x,pr.target.y-pr.y)<pr.target.r+4){
+   damage(pr.target,pr.kind==="knife"?10:6);pr.life=0;
+  }
+ }
+ projectiles=projectiles.filter(p=>p.life>0);
+
+ shake=Math.max(0,shake-dt*20);flash=Math.max(0,flash-dt);
+ const alive=balls.filter(b=>!b.dead);
+ if(alive.length<=1&&running){
+  running=false;const winner=alive[0];
+  statusEl.textContent=winner?("PLAYER "+winner.side+" WINS!"):"DRAW!";
+  if(winner)sound("win");setTimeout(()=>roundNo++,650);
+ }
+}
+function draw(){
+ ctx.save();
+ if(shake)ctx.translate((Math.random()-.5)*shake,(Math.random()-.5)*shake);
+ ctx.clearRect(-10,-10,W+20,H+20);
+ ctx.strokeStyle="#1e1e27";ctx.lineWidth=1;
+ for(let x=10;x<W;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke()}
+ for(let y=10;y<H;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}
+ ctx.strokeStyle="#42424e";ctx.lineWidth=2;ctx.strokeRect(1,1,W-2,H-2);
+
+ for(const z of beams){
+  ctx.save();ctx.globalAlpha=Math.max(0,z.life/.12);ctx.strokeStyle=z.side===1?"#ff4352":"#ff9db0";ctx.lineWidth=3;
+  ctx.beginPath();ctx.moveTo(z.x,z.y);ctx.lineTo(z.x+z.dx,z.y+z.dy);ctx.stroke();ctx.restore();
+ }
+ for(const p of particles){ctx.globalAlpha=Math.max(0,p.life/.75);ctx.fillStyle=p.c;ctx.fillRect(p.x,p.y,2,2)}
+ ctx.globalAlpha=1;
+ for(const w of webs){
+  ctx.globalAlpha=Math.min(1,w.life/1.5);ctx.strokeStyle="#b98cff";ctx.lineWidth=1;
+  ctx.beginPath();ctx.arc(w.x,w.y,w.r,0,Math.PI*2);ctx.stroke();
+  for(let k=0;k<6;k++){const a=k*Math.PI/3;ctx.beginPath();ctx.moveTo(w.x,w.y);ctx.lineTo(w.x+Math.cos(a)*w.r,w.y+Math.sin(a)*w.r);ctx.stroke()}
+ }
+ for(const s of spikes){
+  ctx.fillStyle="#72ef72";ctx.globalAlpha=Math.min(1,s.life/1.5);
+  ctx.beginPath();ctx.moveTo(s.x,s.y);ctx.lineTo(s.x+8,s.y-4);ctx.lineTo(s.x+4,s.y+5);ctx.closePath();ctx.fill();
+ }
+ for(const i of iceBombs){
+  ctx.fillStyle="#75dfff";ctx.globalAlpha=1;ctx.beginPath();ctx.arc(i.x,i.y,7,0,Math.PI*2);ctx.fill();
+ }
+ for(const d of diceDrops){
+  ctx.fillStyle="#fff";ctx.strokeStyle="#222";ctx.globalAlpha=1;ctx.fillRect(d.x-7,d.y-7,14,14);ctx.strokeRect(d.x-7,d.y-7,14,14);
+  ctx.fillStyle="#111";ctx.font="bold 9px monospace";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText(d.n,d.x,d.y);
+ }
+ for(const pr of projectiles){
+  ctx.strokeStyle=pr.kind==="knife"?"#d8b0ff":"#ffd45a";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(pr.x,pr.y);ctx.lineTo(pr.x-(pr.target.x-pr.x)*.08,pr.y-(pr.target.y-pr.y)*.08);ctx.stroke();
+ }
+ ctx.globalAlpha=1;
+ for(const b of balls)if(!b.dead){
+  ctx.save();ctx.translate(b.x,b.y);ctx.rotate(b.spin+=.03);
+  ctx.shadowBlur=12;ctx.shadowColor=b.color;ctx.fillStyle=b.color;
+  ctx.beginPath();ctx.arc(0,0,b.r,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;ctx.strokeStyle="#fff";ctx.globalAlpha=.65;ctx.lineWidth=1;
+  ctx.beginPath();ctx.arc(0,0,b.r*.65,0,Math.PI*1.4);ctx.stroke();
+  ctx.globalAlpha=1;ctx.fillStyle="#101014";ctx.font="bold 8px monospace";ctx.textAlign="center";ctx.textBaseline="middle";
+  ctx.fillText("P"+b.side,0,0);
+  if(b.type==="axe"){
+   ctx.rotate((performance.now()/1000)*b.spinSpeed*18);
+   ctx.strokeStyle="#aaa";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(-b.r-7,0);ctx.lineTo(b.r+7,0);ctx.stroke();
+   ctx.fillStyle="#d8d8d8";ctx.beginPath();ctx.moveTo(b.r+7,0);ctx.lineTo(b.r+1,-6);ctx.lineTo(b.r+1,6);ctx.closePath();ctx.fill();
+  }
+  if(b.type==="blade"){
+   ctx.strokeStyle="#fff";ctx.lineWidth=2;
+   for(let k=0;k<b.blades;k++){const a=k*Math.PI*2/b.blades+(performance.now()/1000)*.8;ctx.beginPath();ctx.moveTo(Math.cos(a)*b.r,Math.sin(a)*b.r);ctx.lineTo(Math.cos(a)*(b.r+9),Math.sin(a)*(b.r+9));ctx.stroke()}
+  }
+  if(b.type==="poison"){ctx.strokeStyle="#73ff79";ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,b.r+4,0,Math.PI*2);ctx.stroke()}
+  if(b.type==="vampire"){ctx.strokeStyle="#ff4060";ctx.beginPath();ctx.arc(0,0,b.r+4,0,Math.PI*2);ctx.stroke()}
+  ctx.restore();
+ }
+ if(flash){ctx.fillStyle="#fff";ctx.globalAlpha=flash*4;ctx.fillRect(0,0,W,H)}
+ ctx.restore();
+}
+function loop(t){
+ const dt=Math.min(.033,(t-last)/1000||0);last=t;
+ if(running)update(dt);draw();requestAnimationFrame(loop);
+}
+draw();requestAnimationFrame(loop);
+</script>
+</body>
+</html>
